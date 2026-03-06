@@ -1,0 +1,68 @@
+// 1. INITIALIZE SUPABASE (Replace with your keys)
+const SUPABASE_URL = 'https://lhoywrhaxktegachfjfw.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imxob3l3cmhheGt0ZWdhY2hmamZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzI3NTYxNzUsImV4cCI6MjA4ODMzMjE3NX0.Q_cKNnUZDlSqL0ISM2p2trYEcMBrnZqcQM2Zol5fAuw';
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// 2. SEARCH BUILDING (NYC Open Data Integration)
+async function checkBuilding() {
+    const address = document.getElementById('addressSearch').value.toUpperCase();
+    const resultsDiv = document.getElementById('results');
+    resultsDiv.innerHTML = "Searching city records...";
+
+    try {
+        // Fetch HPD Violations from NYC Open Data
+        const hpdUrl = `https://data.cityofnewyork.us/resource/wvxf-dwi5.json?address=${encodeURIComponent(address)}&$limit=5`;
+        const response = await fetch(hpdUrl);
+        const violations = await response.json();
+
+        // Fetch Reviews from Supabase
+        const { data: reviews, error } = await supabase
+            .from('reviews')
+            .select('*')
+            .eq('address', address);
+
+        // Display results
+        let html = `<h2>Results for ${address}</h2>`;
+        
+        // Safety Data
+        const severe = violations.filter(v => v.class === 'C');
+        html += severe.length > 0 
+            ? `<p class="warning">🛑 ${severe.length} Severe (Class C) Violations found.</p>` 
+            : `<p>✅ No severe safety violations on record.</p>`;
+
+        // Tenant Reviews
+        html += `<h3>Tenant Reviews</h3>`;
+        if (reviews && reviews.length > 0) {
+            reviews.forEach(r => {
+                html += `<div class="review-item"><strong>${r.rating}/5</strong> - ${r.comment} <br><small>Manager: ${r.landlord_name}</small></div>`;
+            });
+        } else {
+            html += `<p>No reviews yet for this building.</p>`;
+        }
+
+        resultsDiv.innerHTML = html;
+    } catch (err) {
+        resultsDiv.innerHTML = "Error fetching data. Check address spelling.";
+    }
+}
+
+// 3. SUBMIT REVIEW TO SUPABASE
+async function submitReview() {
+    const reviewData = {
+        address: document.getElementById('revAddress').value.toUpperCase(),
+        landlord_name: document.getElementById('revLandlord').value,
+        rating: parseInt(document.getElementById('revRating').value),
+        comment: document.getElementById('revComment').value
+    };
+
+    const { data, error } = await supabase
+        .from('reviews')
+        .insert([reviewData]);
+
+    if (error) {
+        alert("Error saving review: " + error.message);
+    } else {
+        alert("Review posted successfully!");
+        location.reload(); // Refresh to show new review
+    }
+}
